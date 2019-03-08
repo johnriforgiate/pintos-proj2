@@ -457,7 +457,34 @@ setup_stack (void **esp, const char* file_name, char** save_ptr)
 		return success;
 	  }
     }
-  
+  /* 
+
+             +---------------------------------+  
+	     |             "bar\0"             |  Push each word onto stack in reverse order
+             +---------------------------------+
+	     |             "foo\0"             |
+             +---------------------------------+
+             |             "/l\0"              |
+	     +---------------------------------+
+             |           "/bin/ls\0"           |
+	     +---------------------------------+
+             |            0(sentinal)          |  Push a null pointer sentinal
+	     +---------------------------------+
+	     |             argv[3]             |  Push the address of each word in right to left order
+             +---------------------------------+
+             |             argv[2]             |
+	     +---------------------------------+
+             |             argv[1]             |
+	     +---------------------------------+
+             |             argv[0]             |
+	     +---------------------------------+
+	     |              argv               |  Push argv and argc
+	     +---------------------------------+
+             |             4(argc)             |
+	     +---------------------------------+
+    esp ->   |     0 Fake return address       |  Push 0 as fake ret address
+             +---------------------------------+
+*/
   char *token;
 
   char **temp = malloc(2*sizeof(char *));
