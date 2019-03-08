@@ -1,0 +1,7 @@
+pintos-mkdisk filesys.dsk --filesys-size=2
+pintos -f -q
+pintos -p ../../examples/echo -a echo -- -q
+pintos -q run 'echo x'
+pintos -p ../../examples/echo -a echo -- -f -q run 'echo x'
+
+pintos -p ../../tests/userprog/args-none -a args-none -- -f -q run args-none
