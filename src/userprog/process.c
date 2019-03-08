@@ -459,37 +459,49 @@ setup_stack (void **esp, const char* file_name, char** save_ptr)
     }
   
   char *token;
-  char **argv = malloc(2*sizeof(char *));
+
+  char **temp = malloc(2*sizeof(char *));
   int argc = 0;
-  int argv_size = 2;
+  int temp_size = 2;
   
   //PUSH
   
   token = (char *) file_name;
   while (token != NULL)
   {
-	  *esp -= strlen(token) + 1;
-	  argv[argc] = *esp;
+	  temp[argc] = token;
 	  argc++;
 	  
 	  //resize
-	  if (argc >= argv_size)
+	  if (argc >= temp_size)
 	  {
-		  argv_size *= 2;
-		  argv = realloc(argv, argv_size*sizeof(char *));
+		  temp_size *= 2;
+		  temp = realloc(temp, temp_size*sizeof(char *));
 	  }
 	  
 	  //add 00 to end of string
-	  memcpy(*esp, token, strlen(token) + 1);
+	  
 	  token = strtok_r(NULL, " ", save_ptr);
+  }
+  
+
+  char **argv = malloc(sizeof(temp));
+  for (int i = argc-1; i >= 0; i--)
+  {
+	  *esp -= strlen(temp[i]) + 1;
+	  argv[i] = *esp;
+	  
+
+	  memcpy(*esp, temp[i], strlen(temp[i]) + 1);
   }
 
   //Realign the stack
   int alignment = (size_t) *esp % 4;
+
   if (alignment != 0)
   {
 	  *esp -= alignment;
-	  memcpy(*esp, &argv[argc], alignment);
+	  memset(*esp, 0, alignment);
   }
   
   //Push Sentinel
