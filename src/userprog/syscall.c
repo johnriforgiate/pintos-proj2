@@ -207,20 +207,33 @@ read(int fd, const void* buffer, unsigned size)
         return bytes_read;
       }
   sema_up(&filesys_sema);
-  exit(-1);
   return bytes_read;
 }
 
 int
 write(int fd, const void* buffer, unsigned size)
 {
-    if (fd == STDOUT_FILENO)
-    {
-      putbuf(buffer, size);
-      return size;
-    }
-	printf ("unimplemented SYS_WRITE not to stdout call!\n");
-	thread_exit();
+  validate_pointer(buffer);
+  if (fd == STDOUT_FILENO)
+  {
+	if(size > 100)
+      size = 100;
+    putbuf(buffer, size);
+    return size;
+  }
+  struct thread *cur = thread_current();
+  struct list_elem *e;
+  sema_down(&filesys_sema);
+  
+  for (e = list_begin(&cur->file_list); e != list_end(&cur->file_list); e = list_next(e))
+    if (fd == list_entry(e, struct thread_file, elem)->fd) 
+	  {
+        size = file_write(list_entry(e, struct thread_file, elem)->file, (void*)buffer, size);
+        sema_up(&filesys_sema);
+        return size;
+      }
+  sema_up(&filesys_sema);
+  return size;
 }
 
 bool
