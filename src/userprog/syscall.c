@@ -11,6 +11,7 @@
 #include "pagedir.h"
 #include "filesys/filesys.h"
 #include "threads/malloc.h"
+#include "filesys/file.h"
 
 static void syscall_handler (struct intr_frame *);
 static void validate_frame (struct intr_frame *, int);
@@ -90,6 +91,24 @@ syscall_handler (struct intr_frame *f)
 		validate_frame(f,1);
 		break;
 		//f->eax = exec
+	  case SYS_CREATE:
+	    validate_frame(f, 2);
+	    f->eax = create((char*)*((int*)f->esp + 1), *((unsigned*)f->esp + 2));
+		break;
+	  case SYS_OPEN:
+	    validate_frame(f,1);
+		f->eax = open((char*)*((int*)f->esp + 1));
+		break;
+	  case SYS_FILESIZE:
+	    validate_frame(f,1);
+		f->eax = filesize(*((int*)f->esp + 1));
+		break;
+      case SYS_READ:
+	  // Validate each used pointer
+		validate_frame(f, 3);
+		
+	    f->eax = read(*((int*)f->esp + 1), (void*)(*((int*)f->esp + 2)), *((unsigned*)f->esp + 3));
+	    break;
 	  case SYS_WRITE: // Minimal Implementation
 		// Validate each used pointer
 		validate_frame(f, 3);
@@ -111,13 +130,9 @@ syscall_handler (struct intr_frame *f)
 		// Store the write return value in the eax register as a return.
 		f->eax = write(*((int*)f->esp + 1), (void*)(*((int*)f->esp + 2)), *((unsigned*)f->esp + 3));
 		break;
-	  case SYS_CREATE:
-	    validate_frame(f, 2);
-	    f->eax = create((char*)*((int*)f->esp + 1), *((unsigned*)f->esp + 2));
-		break;
-	  case SYS_OPEN:
+	  case SYS_CLOSE:
 	    validate_frame(f,1);
-		f->eax = open((char*)*((int*)f->esp + 1));
+	    close(*((int*)f->esp + 1));
 		break;
 	  default:
         printf (" unimplemented system call: ");
@@ -157,6 +172,46 @@ validate_pointer(const void *vaddr)
 }
 
 int
+filesize(int fd)
+{
+  int size = -1;
+  struct thread *cur = thread_current();
+  struct list_elem *e;
+  sema_down(&filesys_sema);
+  
+  for (e = list_begin(&cur->file_list); e != list_end(&cur->file_list); e = list_next(e))
+    if (fd == list_entry(e, struct thread_file, elem)->fd) 
+	  {
+        size = file_length(list_entry(e, struct thread_file, elem)->file);
+        sema_up(&filesys_sema);
+        return size;
+      }
+  sema_up(&filesys_sema);
+  return size;
+}
+
+int
+read(int fd, const void* buffer, unsigned size)
+{
+  validate_pointer(buffer);
+  int bytes_read = -1;
+  struct thread *cur = thread_current();
+  struct list_elem *e;
+  sema_down(&filesys_sema);
+  
+  for (e = list_begin(&cur->file_list); e != list_end(&cur->file_list); e = list_next(e))
+    if (fd == list_entry(e, struct thread_file, elem)->fd) 
+	  {
+        bytes_read = file_read(list_entry(e, struct thread_file, elem)->file, (void*)buffer, size);
+        sema_up(&filesys_sema);
+        return bytes_read;
+      }
+  sema_up(&filesys_sema);
+  exit(-1);
+  return bytes_read;
+}
+
+int
 write(int fd, const void* buffer, unsigned size)
 {
     if (fd == STDOUT_FILENO)
@@ -191,6 +246,7 @@ open(const char *file)
   if(strlen(file) == 0) return -1;
   struct file* fp;
   struct thread * cur = thread_current();
+  
   sema_down(&filesys_sema);
   fp = filesys_open(file);
   
@@ -204,7 +260,8 @@ open(const char *file)
 			  sema_up(&filesys_sema);
 			  return -1;
 		  }
-		  
+  
+  // Allocate a new file slot in the file_list
   struct thread_file *tf = malloc(sizeof(struct thread_file));
   tf->file = fp;
   tf->fd = cur->fd;
@@ -213,4 +270,23 @@ open(const char *file)
 
   sema_up(&filesys_sema);
   return tf->fd;
+}
+
+void
+close(int fd)
+{
+  sema_down(&filesys_sema);
+  struct thread *cur = thread_current();
+  struct list_elem *e;
+  for (e = list_begin(&cur->file_list); e != list_end(&cur->file_list); e = list_next(e))
+          if (fd == list_entry(e, struct thread_file, elem)->fd) 
+		  {
+			  file_close(list_entry(e, struct thread_file, elem)->file);
+			  list_remove(e);
+			  free(list_entry(e, struct thread_file, elem));
+			  sema_up(&filesys_sema);
+			  return;
+		  }
+  sema_up(&filesys_sema);
+  exit(-1); // fails to find file
 }

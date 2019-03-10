@@ -6,10 +6,16 @@ void syscall_init (void);
 
 void halt(void);
 void exit(int status);
-int write(int, const void*, unsigned);
 bool create(const char*, unsigned);
+int open(const char *);
+int filesize(int);
+int read(int, const void*, unsigned);
+int write(int, const void*, unsigned);
+
+void close(int);
 
 
 void validate_pointer(const void *);
+
 
 #endif /* userprog/syscall.h */
