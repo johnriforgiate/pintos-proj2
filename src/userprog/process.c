@@ -98,10 +98,9 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  while(true)
-  {
-	  thread_yield();
-  }
+  // Added an initial sema_down to make a crude process wait
+  sema_down(&thread_current()->process_wait_sema);
+  return -1;
 }
 
 /* Free the current process's resources. */
@@ -558,7 +557,7 @@ setup_stack (void **esp, const char* file_name, char** save_ptr)
   //free argv
   free(argv);
   
-  hex_dump((uintptr_t)*esp, *esp, sizeof(char) * 64, true);
+  //hex_dump((uintptr_t)*esp, *esp, sizeof(char) * 64, true);
   
   return success;
 }

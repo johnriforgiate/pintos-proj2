@@ -3,8 +3,11 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "threads/vaddr.h"
+#include "threads/init.h"
 
 static void syscall_handler (struct intr_frame *);
+static void validate_frame (struct intr_frame *, int);
 // For debugging
 char *syscall_names[] =  
   {
@@ -58,25 +61,25 @@ syscall_handler (struct intr_frame *f)
 {
   //if (f->esp is a bad pointer){exit(-1);}
   //cast f->esp into an int*, then dereference it for the SYS_CODE
+  validate_pointer((const void*) f->esp);
   switch(*(int*)f->esp)
   {
+	  
 	  case SYS_HALT:
 	  {
-	    printf ("unimplemented SYS_HALT call!\n");
-        thread_exit ();
+	    halt();
         break;
 	  }
       case SYS_EXIT:
 	  {
-	    printf ("unimplemented SYS_EXIT call!\n");
-        thread_exit ();
+		validate_frame(f,1); 
+		exit(*((int*)f->esp + 1));
         break;
 	  }
 	  case SYS_WRITE:
 	  {
-		//printf ("unimplemented SYS_WRITE call!\n");
-        //thread_exit ();
-
+		// Validate each used pointer
+		validate_frame(f, 3);
 		// fd is an int which contains the definition of an open file
 		// First we cast to an int to increment the esp by 4 bytes and then dereference
 		int fd = *((int*)f->esp + 1);
@@ -96,11 +99,40 @@ syscall_handler (struct intr_frame *f)
       {	  
         printf (" unimplemented system call: ");
 		printf (syscall_names[*(int*)f->esp]);
-        thread_exit ();
+        exit(-1);
       }
   }
 }
 
+static void
+validate_frame (struct intr_frame *f, int num_args)
+{
+	for(int i = 0; i < num_args+1; i++)
+	  validate_pointer((void*)(((int*)f->esp + i)));
+}
+
+void
+halt(void)
+{
+	shutdown_power_off();
+}
+
+void 
+exit(int status)
+{
+  // TODO: signal parent
+  printf ("%s: exit(%d)\n", thread_current()->name, status);
+  if(is_thread(thread_current()->parent))
+    sema_up(&thread_current()->parent->process_wait_sema);
+  thread_exit();
+}
+
+void
+validate_pointer(const void *vaddr)
+{
+	if(vaddr < (void*) 0x08048000 || is_kernel_vaddr(vaddr))
+		exit(-1);
+}
 
 int
 write(int fd, const void* buffer, unsigned size)
@@ -113,3 +145,4 @@ write(int fd, const void* buffer, unsigned size)
 	printf ("unimplemented SYS_WRITE not to stdout call!\n");
 	thread_exit();
 }
+
