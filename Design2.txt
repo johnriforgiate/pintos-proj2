@@ -19,6 +19,11 @@ Bryden Pollard
 >> Please cite any offline or online sources you consulted while
 >> preparing your submission, other than the Pintos documentation, course
 >> text, lecture notes, and course staff.
+courses.cs.vt.edu/~cs3204/fall2009/pintos-vt-local/Project2Session.ppt
+https://static1.squarespace.com/static/5b18aa0955b02c1de94e4412/t/5b85fad2f950b7b16b7a2ed6/1535507195196/Pintos+Guide
+https://github.com/Waqee/Pintos-Project-2
+https://github.com/ryantimwilson/Pintos-Project-2
+
 
 			   ARGUMENT PASSING
 			   ================
@@ -43,6 +48,12 @@ Bryden Pollard
 >> and arguments.  In Unix-like systems, the shell does this
 >> separation.  Identify at least two advantages of the Unix approach.
 
+1. By using the Unix approach it is possible to run more complicated
+   commands using pipes or backticks that feed into each other.
+2. The complexity of the kernel is reduced. While the shell may be more 
+   complex because of it, this means that the most essential program in
+   an OS, the kernel, is more readable and less likely to have bugs.
+
 			     SYSTEM CALLS
 			     ============
 
@@ -56,10 +67,17 @@ Bryden Pollard
 >> Are file descriptors unique within the entire OS or just within a
 >> single process?
 
+File descriptors are associated with open files via a list. Each open file
+has a file descriptor starting from 2 because 0 and 1 are reserved. In this
+implementation file descriptors are unique within a single process.
+
 ---- ALGORITHMS ----
 
 >> B3: Describe your code for reading and writing user data from the
 >> kernel.
+
+User data can be written or read from the kernel by issuing the SYS_READ or SYS_WRITE
+command in a kernel interrupt frame. 
 
 >> B4: Suppose a system call causes a full page (4,096 bytes) of data
 >> to be copied from user space into the kernel.  What is the least

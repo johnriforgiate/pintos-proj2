@@ -12,6 +12,7 @@
 #include "filesys/filesys.h"
 #include "threads/malloc.h"
 #include "filesys/file.h"
+#include "process.h"
 
 static void syscall_handler (struct intr_frame *);
 static void validate_frame (struct intr_frame *, int);
@@ -89,8 +90,12 @@ syscall_handler (struct intr_frame *f)
         break;
 	  case SYS_EXEC: // TODO
 		validate_frame(f,1);
+		f->eax = exec((void*)(*((int*)f->esp + 1)));
 		break;
-		//f->eax = exec
+	  case SYS_WAIT:
+	    validate_frame(f, 1);
+		f->eax = wait(*((int*)f->esp + 1));
+		break;
 	  case SYS_CREATE:
 	    validate_frame(f, 2);
 	    f->eax = create((char*)*((int*)f->esp + 1), *((unsigned*)f->esp + 2));
@@ -129,6 +134,14 @@ syscall_handler (struct intr_frame *f)
 		
 		// Store the write return value in the eax register as a return.
 		f->eax = write(*((int*)f->esp + 1), (void*)(*((int*)f->esp + 2)), *((unsigned*)f->esp + 3));
+		break;
+	  case SYS_SEEK:
+	    validate_frame(f,2);
+		seek(*((int*)f->esp + 1),*((unsigned*)f->esp + 2));
+		break;
+	  case SYS_TELL:
+	    validate_frame(f,1);
+		f->eax = tell(*((int*)f->esp + 1));
 		break;
 	  case SYS_CLOSE:
 	    validate_frame(f,1);
@@ -190,8 +203,20 @@ filesize(int fd)
   return size;
 }
 
+pid_t
+exec(const char *cmd_line)
+{
+	validate_pointer(cmd_line);
+	return process_execute(cmd_line);
+}
+
 int
-read(int fd, const void* buffer, unsigned size)
+wait(pid_t pid)
+{
+	return process_wait(pid);
+}
+int
+read(int fd, void* buffer, unsigned size)
 {
   validate_pointer(buffer);
   int bytes_read = -1;
@@ -280,11 +305,43 @@ open(const char *file)
   tf->fd = cur->fd;
   cur->fd++;
   list_push_back(&cur->file_list, &tf->elem);
-
+  
+  //file_deny_write(fp);
   sema_up(&filesys_sema);
   return tf->fd;
 }
-
+void
+seek(int fd, unsigned position)
+{
+  struct thread *cur = thread_current();
+  struct list_elem *e;
+  sema_down(&filesys_sema);
+  
+  for (e = list_begin(&cur->file_list); e != list_end(&cur->file_list); e = list_next(e))
+    if (fd == list_entry(e, struct thread_file, elem)->fd) 
+	  {
+        file_seek(list_entry(e, struct thread_file, elem)->file, position);
+        sema_up(&filesys_sema);
+		return;
+      }
+  sema_up(&filesys_sema);
+}
+unsigned
+tell(int fd)
+{
+  sema_down(&filesys_sema);
+  struct thread *cur = thread_current();
+  struct list_elem *e;
+  for (e = list_begin(&cur->file_list); e != list_end(&cur->file_list); e = list_next(e))
+    if (fd == list_entry(e, struct thread_file, elem)->fd) 
+	  {
+         off_t offs = file_tell(list_entry(e, struct thread_file, elem)->file);
+         sema_up(&filesys_sema);
+         return offs;
+      }
+  sema_up(&filesys_sema);
+  return -1;
+}
 void
 close(int fd)
 {
@@ -297,6 +354,7 @@ close(int fd)
 			  file_close(list_entry(e, struct thread_file, elem)->file);
 			  list_remove(e);
 			  free(list_entry(e, struct thread_file, elem));
+			  //file_allow_write(list_entry(e, struct thread_file, elem)->file);
 			  sema_up(&filesys_sema);
 			  return;
 		  }
