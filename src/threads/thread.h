@@ -97,6 +97,9 @@ struct thread
 	struct thread *parent;
 	
 	struct semaphore process_wait_sema;
+	
+	struct list file_list;
+	int fd;
 
 
 #ifdef USERPROG
@@ -108,6 +111,8 @@ struct thread
     unsigned magic;                     /* Detects stack overflow. */
   };
 
+struct semaphore filesys_sema;  
+  
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */

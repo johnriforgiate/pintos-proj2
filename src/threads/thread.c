@@ -92,7 +92,7 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
-  
+  sema_init (&filesys_sema, 1);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -464,11 +464,15 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  sema_init (&t->process_wait_sema, 0);
+  list_init (&t->file_list);
+  t->fd = 2;
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
   // Added a sema for the processess wait TODO: Fix
-  sema_init (&t->process_wait_sema, 0);
+  
+
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
 }

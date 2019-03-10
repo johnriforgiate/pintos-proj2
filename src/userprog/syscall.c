@@ -1,13 +1,24 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
 #include <syscall-nr.h>
+#include <stddef.h>
+#include <string.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "threads/init.h"
+#include "devices/shutdown.h"
+#include "pagedir.h"
+#include "filesys/filesys.h"
+#include "threads/malloc.h"
 
 static void syscall_handler (struct intr_frame *);
 static void validate_frame (struct intr_frame *, int);
+struct thread_file {
+  struct file *file;
+  int fd;
+  struct list_elem elem;
+};
 // For debugging
 char *syscall_names[] =  
   {
@@ -64,43 +75,54 @@ syscall_handler (struct intr_frame *f)
   validate_pointer((const void*) f->esp);
   switch(*(int*)f->esp)
   {
-	  
-	  case SYS_HALT:
-	  {
+	  case SYS_HALT: // working
 	    halt();
         break;
-	  }
-      case SYS_EXIT:
-	  {
+      case SYS_EXIT: // working
+	    // Validate each used pointer
 		validate_frame(f,1); 
+		// *((int*)f->esp + 1);
+		// status is an int which contains the definition of an open file
+		// First we cast to an int to increment the esp by 4 bytes and then dereference
 		exit(*((int*)f->esp + 1));
         break;
-	  }
-	  case SYS_WRITE:
-	  {
+	  case SYS_EXEC: // TODO
+		validate_frame(f,1);
+		break;
+		//f->eax = exec
+	  case SYS_WRITE: // Minimal Implementation
 		// Validate each used pointer
 		validate_frame(f, 3);
+		
+		// *((int*)f->esp + 1);
 		// fd is an int which contains the definition of an open file
 		// First we cast to an int to increment the esp by 4 bytes and then dereference
-		int fd = *((int*)f->esp + 1);
 		
+		
+		// (void*)(*((int*)f->esp + 2));
 		// buffer is what is to be written to the file.
 		// First cast to an int to increment by 8 and dereference to get the pointer to the function which we cast as a void pointer
-        void *buffer = (void*)(*((int*)f->esp + 2));
+        
 		
+		// *((unsigned*)f->esp + 3);
 		// size is a pointer to an unsigned int that contains the length of the buffer to be written to the file
 		// First increment 12 bytes and dereference it. 
-        unsigned size = *((unsigned*)f->esp + 3);
 		
-        f->eax = write(fd, buffer, size);
+		// Store the write return value in the eax register as a return.
+		f->eax = write(*((int*)f->esp + 1), (void*)(*((int*)f->esp + 2)), *((unsigned*)f->esp + 3));
 		break;
-	   }
+	  case SYS_CREATE:
+	    validate_frame(f, 2);
+	    f->eax = create((char*)*((int*)f->esp + 1), *((unsigned*)f->esp + 2));
+		break;
+	  case SYS_OPEN:
+	    validate_frame(f,1);
+		f->eax = open((char*)*((int*)f->esp + 1));
+		break;
 	  default:
-      {	  
         printf (" unimplemented system call: ");
 		printf (syscall_names[*(int*)f->esp]);
         exit(-1);
-      }
   }
 }
 
@@ -130,8 +152,8 @@ exit(int status)
 void
 validate_pointer(const void *vaddr)
 {
-	if(vaddr < (void*) 0x08048000 || is_kernel_vaddr(vaddr))
-		exit(-1);
+	  if(vaddr < (void*) 0x08048000 || is_kernel_vaddr(vaddr) || pagedir_get_page(thread_current()->pagedir, vaddr) == NULL)
+	    exit(-1);
 }
 
 int
@@ -146,3 +168,49 @@ write(int fd, const void* buffer, unsigned size)
 	thread_exit();
 }
 
+bool
+create(const char *file, unsigned initial_size)
+{
+  bool success = false;
+  // Check for NULL pointer
+  validate_pointer(file);
+  
+  // Check for a file that is too long/short
+  if(strlen(file) > 14 || strlen(file) == 0) return false;
+  
+  sema_down(&filesys_sema);
+  success = filesys_create(file, initial_size);
+  sema_up(&filesys_sema);
+  return success;
+}
+
+int
+open(const char *file)
+{
+  validate_pointer(file);
+  if(strlen(file) == 0) return -1;
+  struct file* fp;
+  struct thread * cur = thread_current();
+  sema_down(&filesys_sema);
+  fp = filesys_open(file);
+  
+  if(NULL == fp) return -1;
+  
+  // Check if file is already open by process
+  struct list_elem *e;
+  for (e = list_begin(&cur->file_list); e != list_end(&cur->file_list); e = list_next(e))
+          if (fp == list_entry(e, struct thread_file, elem)->file) 
+		  {
+			  sema_up(&filesys_sema);
+			  return -1;
+		  }
+		  
+  struct thread_file *tf = malloc(sizeof(struct thread_file));
+  tf->file = fp;
+  tf->fd = cur->fd;
+  cur->fd++;
+  list_push_back(&cur->file_list, &tf->elem);
+
+  sema_up(&filesys_sema);
+  return tf->fd;
+}
