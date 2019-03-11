@@ -306,7 +306,7 @@ open(const char *file)
   cur->fd++;
   list_push_back(&cur->file_list, &tf->elem);
   
-  //file_deny_write(fp);
+
   sema_up(&filesys_sema);
   return tf->fd;
 }

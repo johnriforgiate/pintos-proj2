@@ -33,6 +33,9 @@ https://github.com/ryantimwilson/Pintos-Project-2
 >> A1: Copy here the declaration of each new or changed `struct' or
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
+N/A
+One enumerator for debugging: syscall_names[]
+it is used to print out the name of the SYS processes that have been called.
 
 ---- ALGORITHMS ----
 
@@ -40,9 +43,21 @@ https://github.com/ryantimwilson/Pintos-Project-2
 >> you arrange for the elements of argv[] to be in the right order?
 >> How do you avoid overflowing the stack page?
 
+We used a loop to read in all the arguments and another loop to push them to
+the stack because they need to be pushed in reverse order. During the second
+loop we save the pointers to them in memory so we can push those to the stack
+as well. We originally tried using recursion but the extra frames overflowed 
+the stack page.
+
+
 ---- RATIONALE ----
 
 >> A3: Why does Pintos implement strtok_r() but not strtok()?
+
+If we used strtok() instead of strtok_r() we would lose access
+to the other items in the string. Because we are able to save the 
+pointer, the kernel can come back and look at where it needs to 
+go to get the arguments when we need them.
 
 >> A4: In Pintos, the kernel separates commands into an executable name
 >> and arguments.  In Unix-like systems, the shell does this
@@ -53,6 +68,8 @@ https://github.com/ryantimwilson/Pintos-Project-2
 2. The complexity of the kernel is reduced. While the shell may be more 
    complex because of it, this means that the most essential program in
    an OS, the kernel, is more readable and less likely to have bugs.
+3. Because the running time of the kernel is expensive compared to user
+   programs it would be beneficial to have less kernel code.
 
 			     SYSTEM CALLS
 			     ============
@@ -62,6 +79,14 @@ https://github.com/ryantimwilson/Pintos-Project-2
 >> B1: Copy here the declaration of each new or changed `struct' or
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
+in struct thread:
+
+struct thread *parent; // used to keep track of the parent (if any)
+	
+struct semaphore process_wait_sema; // used for a crude implementation of process_wait to be able to run tests
+	
+struct list file_list; // used to store pointers to all the open files a thread contains
+int fd; // used to identify the files a thread contains
 
 >> B2: Describe how file descriptors are associated with open files.
 >> Are file descriptors unique within the entire OS or just within a
@@ -77,7 +102,12 @@ implementation file descriptors are unique within a single process.
 >> kernel.
 
 User data can be written or read from the kernel by issuing the SYS_READ or SYS_WRITE
-command in a kernel interrupt frame. 
+command in a kernel interrupt frame. Both use a semaphore when accessing the file to help with
+synchronization. Once we have opened a file, we can access it via a pointer to the file destination
+or the reference id that the thread that opened it has saved.
+By checking if the file is in our file list we are able to make sure we don't open two copies of the 
+same file or try to delete two copies of the same file. 
+
 
 >> B4: Suppose a system call causes a full page (4,096 bytes) of data
 >> to be copied from user space into the kernel.  What is the least
@@ -86,8 +116,16 @@ command in a kernel interrupt frame.
 >> for a system call that only copies 2 bytes of data?  Is there room
 >> for improvement in these numbers, and how much?
 
+pagedir_get_page would be called from the syscall.c and process.c a total of 11 times regardlessly
+because we use it to verify the validity of a pointer. It is possible to greatly reduce this if
+we chose to do the pagefault exception method instead. It would only need 2 or 3 calls in this case.
+
 >> B5: Briefly describe your implementation of the "wait" system call
 >> and how it interacts with process termination.
+
+The current wait system call is not complete because we have no support for children.
+There is just a semaphore making sure that the process waits until a subprocess under it has been completed.
+
 
 >> B6: Any access to user program memory at a user-specified address
 >> can fail due to a bad pointer value.  Such accesses must cause the
@@ -103,12 +141,24 @@ command in a kernel interrupt frame.
 >> paragraphs, describe the strategy or strategies you adopted for
 >> managing these issues.  Give an example.
 
+In system calls we just checked to make sure that the call was within the bounds of 
+acceptable memory and that the page was actually allocated for the
+specific thread that needed the memory. Our strategy was to prevent 
+access violations from happening by verifying these things each time
+a pointer would be dereferenced.
+
+When an error is detected we do nothing because we did not implement error checking yet. 
+
 ---- SYNCHRONIZATION ----
 
 >> B7: The "exec" system call returns -1 if loading the new executable
 >> fails, so it cannot return before the new executable has completed
 >> loading.  How does your code ensure this?  How is the load
 >> success/failure status passed back to the thread that calls "exec"?
+
+We were unable to implement this, but if we had more time we were planning
+on having a child process store whether or not it had been loaded and using
+the barrier call similar to what ryantimwilson did.
 
 >> B8: Consider parent process P with child process C.  How do you
 >> ensure proper synchronization and avoid race conditions when P
@@ -117,16 +167,29 @@ command in a kernel interrupt frame.
 >> terminates without waiting, before C exits?  After C exits?  Are
 >> there any special cases?
 
+P uses process_wait and has a semaphore that will not let it run until
+the thread running under it finishes. Because inheritance only allows for
+one child per process race conditions are avoided.
+
 ---- RATIONALE ----
 
 >> B9: Why did you choose to implement access to user memory from the
 >> kernel in the way that you did?
 
+It seemed like the simplest way to access things would be to check the
+pointer and dereference it each time to avoid page faults and other errors.
+
 >> B10: What advantages or disadvantages can you see to your design
 >> for file descriptors?
 
+File descriptors are small, taking up only the space of an int and
+are relatively easy to access. However, they are stored within a list
+and lists in pintos add a lot of complexity to the equation which is 
+a serious disadvantage because of the large complexity of pintos as it is.
+
 >> B11: The default tid_t to pid_t mapping is the identity mapping.
 >> If you changed it, what advantages are there to your approach?
+We did not change it.
 
 			   SURVEY QUESTIONS
 			   ================
