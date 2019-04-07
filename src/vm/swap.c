@@ -74,7 +74,13 @@ swap_out (struct page *p)
   p->sector = slot * PAGE_SECTORS;
 
   // Write out page sectors
-/* add code here */ 
+  // Use block_write to write out each page sector.
+  for (int j = 0; j < PAGE_SECTORS; j++)
+    block_write (swap_device, p->sector + j, (uint8_t *) p->frame->base + (j*BLOCK_SECTOR_SIZE));
+  // The block_write function takes in a struct block, a block_sector_t, and a const void * which is the buffer.
+  // The swap_device is the block we want to write to.
+  // Every page sector can be indexed by adding an integer to it. We write one sector each time
+  // Since we write the size of a sector each time, we know that the next sector will be the base + the size of the number of sectors we wrote.
  
   p->private = false;
   p->file = NULL;

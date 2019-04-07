@@ -51,11 +51,14 @@ page_for_addr (const void *address)
         return hash_entry (e, struct page, hash_elem);
 //edited
 // Check that the user is accessing the stack. 
-// Is the address is within the memory allocated stack itself? 
-// Is the user accessing an address within the bounds of the PUSHA command? If so the pointer should be valid.
-      if((p.addr > PHYS_BASE - STACK_MAX) && ((void *)thread_current()->user_esp - 32 < address))
+// Is the user accessing an address within the bounds of the PUSHA command? 
+// Is the address is within the memory allocated stack itself?
+// If both of these are true this should be a valid stack access.
+      if((void *)thread_current()->user_esp - 32 < address && p.addr > PHYS_BASE - STACK_MAX)
         return page_allocate (p.addr, false); // Allocate stack page by passing it the virtual address and say false, not read only.
+
     }
+	
   return NULL;
 }
 
@@ -108,7 +111,7 @@ page_in (void *fault_addr)
     return false;
 
   p = page_for_addr (fault_addr);
-  if (p == NULL || !is_user_vaddr(fault_addr) || !fault_addr >= (void*)0x08048000) 
+  if (p == NULL) 
     return false; 
 
   frame_lock (p);
@@ -136,7 +139,7 @@ bool
 page_out (struct page *p) 
 {
   bool dirty;
-  bool ok = false;
+  bool ok = true;
 
   ASSERT (p->frame != NULL);
   ASSERT (lock_held_by_current_thread (&p->frame->lock));
@@ -145,16 +148,32 @@ page_out (struct page *p)
      process to fault.  This must happen before checking the
      dirty bit, to prevent a race with the process dirtying the
      page. */
-
-/* add code here */
+  // pagedir_clear_page marks the page as "not present".
+  // The description matches exactly with the comment in pagedir.c
+  pagedir_clear_page(p->thread->pagedir, (void *)p->addr);
 
   /* Has the frame been modified? */
+  // pagedir_is_dirty takes in a pointer to the page directory and a const void * to the virtual page 
+  dirty = pagedir_is_dirty(p->thread->pagedir, (const void *) p->addr);
 
-/* add code here */
+  // If the page is clean it is ok to page out.
+  if(!dirty) ok = true;
 
-  /* Write frame contents to disk if necessary. */
+  // P must have a locked frame so that we can use swap_out.
+  // If there is no page file, we need to swap out regardless.
+  if(p->file == NULL) ok = swap_out(p);
+  else if(dirty)
+  {
+	// If the page file is dirty, we need to either swap out or write to the file system.
+	// In the page.h file it tells us that if private is true we should write to swap and if it is false we should write to a file.
+    if(p->private) ok = swap_out(p);
+    else ok = file_write_at(p->file, (const void *)p->frame->base, p->file_bytes, p->file_offset);
+	// file write_at takes in a file ptr, a const void pointer to a buffer, the size to write size, and the offset to start writing at 
+	// We want to write to the file, from the buffer which is at the base of the frame for the page, the offset in the file, and the file bytes, just like defined in the page.h comments.
+  }
 
-/* add code here */
+  // If it is ok to page out now, we can set the frame to NULL.
+  if(ok) p->frame = NULL;
 
   return ok;
 }

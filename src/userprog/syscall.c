@@ -504,8 +504,33 @@ lookup_mapping (int handle)
 static void
 unmap (struct mapping *m) 
 {
-/* add code here */
-}
+//edited
+  // Remove the current mapping from the thread's mapping list.
+  list_remove(&m->elem);
+  
+  // Pointer to the current page.
+  void *current_page;
+  // Pointer to the current thread's page directory.
+  uint32_t *current_directory = thread_current()->pagedir; 
+  
+  // Traverse all pages in the mapped memory.
+  for(unsigned int i = 0; i < m->page_cnt; i++)
+  {
+	// Update the value of the current page by adjusting the address from the base with the size of each page.
+	current_page = m->base + (i*PGSIZE);
+    // Check if the current page is dirty, if it is, write it to disk. (Dirty means it has been used/modified.)
+    if (pagedir_is_dirty(current_directory, current_page))
+    {
+      lock_acquire(&fs_lock);
+	  // File write takes in a pointer to the file, a pointer to the buffer, the size to write in, and the offset of where to write
+	  // We pass it the file pointer contained in the mapping, the location of the current page in the mapping, the size of a page, and the location in the file to write to. 
+      file_write_at(m->file, current_page, PGSIZE, (i*PGSIZE));
+      lock_release(&fs_lock);
+    }
+	// Deallocate each page after we are done with it.
+	page_deallocate(current_page);
+  }
+} 
  
 /* Mmap system call. */
 static int
@@ -560,8 +585,11 @@ sys_mmap (int handle, void *addr)
 static int
 sys_munmap (int mapping) 
 {
-/* add code here */
+//edited
 
+  //struct mapping *m = lookup_mapping(mapping);
+  //unmap(m);
+  unmap(lookup_mapping(mapping));
   return 0;
 }
  
