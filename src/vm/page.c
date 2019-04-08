@@ -160,7 +160,7 @@ page_out (struct page *p)
   if(!dirty) ok = true;
 
   // P must have a locked frame so that we can use swap_out.
-  // If there is no page file, we need to swap out regardless.
+  // If there is a NULL page file, we need to swap out regardless.
   if(p->file == NULL) ok = swap_out(p);
   else if(dirty)
   {

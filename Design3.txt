@@ -1,0 +1,140 @@
+		           +---------------------------+
+       	           |         CIS 520           |
+		           | PROJECT 3: Virtual Memory |
+		           |     DESIGN DOCUMENT       |
+		           +---------------------------+
+
+---- GROUP ----
+
+>> Fill in the names of your group members.
+
+John Riforgiate
+Bryden Pollard
+
+---- PRELIMINARIES ----
+
+>> If you have any preliminary comments on your submission, notes for the
+>> TAs, or extra credit, please give them here.
+
+>> Please cite any offline or online sources you consulted while
+>> preparing your submission, other than the Pintos documentation, course
+>> text, lecture notes, and course staff.
+
+https://static1.squarespace.com/static/5b18aa0955b02c1de94e4412/t/5b85fad2f950b7b16b7a2ed6/1535507195196/Pintos+Guide
+http://bits.usc.edu/cs350/assignments/project3.pdf
+https://github.com/ChristianJHughes/pintos-project3
+https://github.com/ryantimwilson/Pintos-Project-3
+
+
+
+			PAGE TABLE MANAGEMENT
+			=====================
+
+---- ALGORITHMS ----
+
+>> A1: In a few paragraphs, describe the existing code for locating the
+>> frame, if any, that contains the data of a given page.
+
+If there is a page fault and the program cannot find the frame it calls page_in which is contained within page.c.
+page_in then locks the frame and calls do_page_in.
+In the documentation for pages it says that frame_lock must be hold for frame_alloc_and_lock to be called.
+do_page_in calls frame_alloc_and_lock, which attempts to find a free frame, and failing that find a frame to evict.
+
+Unfortunately the page_out process had not been implemented yet and a frame could not always be evicted properly.
+
+---- SYNCHRONIZATION ----
+
+>> A2: When two user processes both need a new frame at the same time,
+>> how are races avoided?
+
+Whenever a process tries to allocate a frame it calls try_frame_alloc_and_lock multiple times which tries to acquire the scan_lock.
+Because the scan_lock is necessary to allocate a frame, only one process is allowed to get a frame at a time.
+
+		       PAGING TO AND FROM DISK
+		       =======================
+
+---- ALGORITHMS ----
+
+>> B1: When a frame is required but none is free, some frame must be
+>> evicted.  Describe the algorithm used to choose a frame to evict.
+
+First we mark the page as absent in the table, causing any thread accessing it to page fault.
+Then we check if a the frame to evict is dirty, if it is not, we know we can swap it out. 
+If the file is null, we know we must swap it out, otherwise if it is not null, we check if the file is dirty and private.
+If it is we write it to the block system.
+If it is dirty and public we write it to the file system for all to access.
+
+>> B2: Explain your heuristic for deciding whether a page fault for an
+>> invalid virtual address should cause the stack to be extended into
+>> the page that faulted.
+
+We used the logic that was suggested in the Pintos documentation, checking that the user is accessing within the bounds of the PUSHA command,
+as well as checking that the user is accessing values within the actual stack. The documentation suggested that there was a possibility of even
+larger calls causing problems because they should be valid, but since we were passing the tests we chose not to worry about it.
+
+			 MEMORY MAPPED FILES
+			 ===================
+
+---- DATA STRUCTURES ----
+
+>> C1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+We didn't change any structures or variables.
+
+---- ALGORITHMS ----
+
+>> C2: Describe how memory mapped files integrate into your virtual
+>> memory subsystem.  Explain how the page fault and eviction
+>> processes differ between swap pages and other pages.
+
+We used the mapping struct that each thread already possesed. threads.h contained a list of memory mapped files, so we used this list to keep track
+of how files are accessed within virtual memory.
+
+When pages that don't use files are evicted they are sent directly to swap memory; however if the page does use a file it is written out into a file. 
+Because pages are stored in the thread's memory list we don't use swap memory to change mapped files.
+
+
+>> C3: Explain how you determine whether a new file mapping overlaps
+>> any existing segment.
+
+
+
+---- RATIONALE ----
+
+>> C4: Mappings created with "mmap" have similar semantics to those of
+>> data demand-paged from executables, except that "mmap" mappings are
+>> written back to their original files, not to swap.  This implies
+>> that much of their implementation can be shared.  Explain why your
+>> implementation either does or does not share much of the code for
+>> the two situations.
+
+Because they are almost completely the same we used the page_out function contained in page.c.
+page_out quickly checks if it should write to the original file or to swap based on the file type.
+While this greatly reduced complexity, it probably added a little time in the worst case, 
+causing the OS to have to check each time what kind of page is being mapped.
+
+			   SURVEY QUESTIONS
+			   ================
+
+Answering these questions is optional, but it will help us improve the
+course in future quarters.  Feel free to tell us anything you
+want--these questions are just to spur your thoughts.  You may also
+choose to respond anonymously in the course evaluations at the end of
+the quarter.
+
+>> In your opinion, was this assignment, or any one of the three problems
+>> in it, too easy or too hard?  Did it take too long or too little time?
+
+>> Did you find that working on a particular part of the assignment gave
+>> you greater insight into some aspect of OS design?
+
+>> Is there some particular fact or hint we should give students in
+>> future quarters to help them solve the problems?  Conversely, did you
+>> find any of our guidance to be misleading?
+
+>> Do you have any suggestions for the TAs to more effectively assist
+>> students, either for future quarters or the remaining projects?
+
+>> Any other comments?
