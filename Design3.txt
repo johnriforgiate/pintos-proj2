@@ -99,7 +99,8 @@ Because pages are stored in the thread's memory list we don't use swap memory to
 >> C3: Explain how you determine whether a new file mapping overlaps
 >> any existing segment.
 
-
+We don't let a segment become overlapped because we check if the page was allocated or not before allocating the segment. 
+By using the page_allocate() function we instantly free the page if it has already been mapped.
 
 ---- RATIONALE ----
 
